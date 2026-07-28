@@ -1,5 +1,6 @@
 import streamlit as st
 from utils.pdf_loader import extract_text_from_pdf
+from utils.splitter import split_text
 
 st.set_page_config(
     page_title="AskMyPDF",
@@ -20,13 +21,17 @@ if uploaded_file:
     st.success(f"Uploaded: {uploaded_file.name}")
 
     with st.spinner("Reading PDF..."):
-
         text = extract_text_from_pdf(uploaded_file)
 
-    st.subheader("Extracted Text")
+    chunks = split_text(text)
 
+    st.subheader("Document Statistics")
+    st.write(f"Characters: {len(text)}")
+    st.write(f"Chunks Created: {len(chunks)}")
+
+    st.subheader("First Chunk")
     st.text_area(
-        "PDF Content",
-        text,
-        height=400
+        "Chunk Preview",
+        chunks[0],
+        height=300
     )
