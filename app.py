@@ -2,9 +2,14 @@ import streamlit as st
 
 from utils.pdf_loader import extract_text_from_pdf
 from utils.splitter import split_text
-from utils.embeddings import create_embeddings
-from utils.retriever import create_vector_store
-
+from utils.embeddings import (
+    create_embeddings,
+    create_query_embedding
+)
+from utils.retriever import (
+    create_vector_store,
+    search_vector_store
+)
 
 # ----------------------------------
 # Page Configuration
@@ -30,20 +35,20 @@ uploaded_file = st.file_uploader(
 )
 
 # ----------------------------------
-# Process PDF
+# Process Uploaded PDF
 # ----------------------------------
 if uploaded_file:
 
     st.success(f"Uploaded: {uploaded_file.name}")
 
-    # Extract text
+    # Read PDF
     with st.spinner("Reading PDF..."):
         text = extract_text_from_pdf(uploaded_file)
 
-    # Split text into chunks
+    # Split into chunks
     chunks = split_text(text)
 
-    # Generate embeddings
+    # Create embeddings
     with st.spinner("Generating embeddings..."):
         embeddings = create_embeddings(chunks)
 
@@ -73,21 +78,49 @@ if uploaded_file:
     st.code(str(embeddings[0][:10]), language="text")
 
     # ----------------------------------
-    # Vector Store Information
+    # Vector Store
     # ----------------------------------
     st.subheader("📦 Vector Store")
 
     st.success("FAISS vector store created successfully!")
 
-    st.write(f"Total vectors in FAISS: {vector_store.ntotal}")
+    st.write(f"Total vectors stored: {vector_store.ntotal}")
 
     # ----------------------------------
-    # Chunk Preview
+    # Ask a Question
+    # ----------------------------------
+    st.subheader("❓ Ask a Question")
+
+    question = st.text_input(
+        "Ask something about the uploaded PDF"
+    )
+
+    if question:
+
+        with st.spinner("Searching document..."):
+
+            query_embedding = create_query_embedding(question)
+
+            retrieved_chunks = search_vector_store(
+                vector_store,
+                query_embedding,
+                chunks,
+                k=3
+            )
+
+        st.subheader("🔍 Top Matching Chunks")
+
+        for i, chunk in enumerate(retrieved_chunks, start=1):
+            with st.expander(f"Result {i}"):
+                st.write(chunk)
+
+    # ----------------------------------
+    # Debug Section
     # ----------------------------------
     st.subheader("📄 First Chunk Preview")
 
     st.text_area(
-        label="Chunk Content",
-        value=chunks[0],
+        "Chunk Content",
+        chunks[0],
         height=300
     )
