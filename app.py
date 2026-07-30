@@ -10,6 +10,7 @@ from utils.retriever import (
     create_vector_store,
     search_vector_store
 )
+from utils.llm import ask_gemini
 
 # ----------------------------------
 # Page Configuration
@@ -48,7 +49,7 @@ if uploaded_file:
     # Split into chunks
     chunks = split_text(text)
 
-    # Create embeddings
+    # Generate embeddings
     with st.spinner("Generating embeddings..."):
         embeddings = create_embeddings(chunks)
 
@@ -97,6 +98,7 @@ if uploaded_file:
 
     if question:
 
+        # Search document
         with st.spinner("Searching document..."):
 
             query_embedding = create_query_embedding(question)
@@ -108,10 +110,21 @@ if uploaded_file:
                 k=3
             )
 
-        st.subheader("🔍 Top Matching Chunks")
+        # Combine retrieved chunks
+        context = "\n\n".join(retrieved_chunks)
 
-        for i, chunk in enumerate(retrieved_chunks, start=1):
-            with st.expander(f"Result {i}"):
+        # Ask Gemini
+        with st.spinner("Generating answer with Gemini..."):
+            answer = ask_gemini(question, context)
+
+        # Display answer
+        st.subheader("🤖 AI Answer")
+        st.success(answer)
+
+        # Optional: Show retrieved chunks
+        with st.expander("🔍 View Retrieved Chunks"):
+            for i, chunk in enumerate(retrieved_chunks, start=1):
+                st.markdown(f"### Chunk {i}")
                 st.write(chunk)
 
     # ----------------------------------
