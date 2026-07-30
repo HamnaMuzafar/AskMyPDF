@@ -18,9 +18,10 @@ def create_vector_store(embeddings):
     return index
 
 
-def search_vector_store(index, query_embedding, chunks, k=3):
+def search_vector_store(index, query_embedding, chunks, sources, k=5):
     """
-    Search the vector store and return the most relevant chunks.
+    Search the vector store and return the most relevant chunks,
+    each tagged with the source document it came from.
     """
 
     query_embedding = np.array([query_embedding]).astype("float32")
@@ -30,6 +31,12 @@ def search_vector_store(index, query_embedding, chunks, k=3):
     results = []
 
     for idx in indices[0]:
-        results.append(chunks[idx])
+
+        results.append(
+            {
+                "text": chunks[idx],
+                "source": sources[idx],
+            }
+        )
 
     return results

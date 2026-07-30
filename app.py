@@ -66,23 +66,26 @@ if "chat_history" not in st.session_state:
 if "processed" not in st.session_state:
     st.session_state.processed = False
 
-if "file_name" not in st.session_state:
-    st.session_state.file_name = None
+if "file_names" not in st.session_state:
+    st.session_state.file_names = []
 
-if "file_size" not in st.session_state:
-    st.session_state.file_size = None
+if "total_characters" not in st.session_state:
+    st.session_state.total_characters = 0
 
-if "text" not in st.session_state:
-    st.session_state.text = None
+if "all_chunks" not in st.session_state:
+    st.session_state.all_chunks = None
 
-if "chunks" not in st.session_state:
-    st.session_state.chunks = None
+if "chunk_sources" not in st.session_state:
+    st.session_state.chunk_sources = None
 
 if "embeddings" not in st.session_state:
     st.session_state.embeddings = None
 
 if "vector_store" not in st.session_state:
     st.session_state.vector_store = None
+
+if "uploader_key" not in st.session_state:
+    st.session_state.uploader_key = 0
 
 
 # --------------------------------------------------
@@ -91,9 +94,11 @@ if "vector_store" not in st.session_state:
 
 st.sidebar.title("Upload PDF")
 
-uploaded_file = st.sidebar.file_uploader(
-    "Choose a PDF",
-    type=["pdf"]
+uploaded_files = st.sidebar.file_uploader(
+    "Choose PDF(s)",
+    type=["pdf"],
+    accept_multiple_files=True,
+    key=f"uploader_{st.session_state.uploader_key}",
 )
 
 reset_col, clear_col = st.sidebar.columns(2)
@@ -101,12 +106,13 @@ reset_col, clear_col = st.sidebar.columns(2)
 if reset_col.button("🗑 Reset Everything"):
     st.session_state.chat_history = []
     st.session_state.processed = False
-    st.session_state.file_name = None
-    st.session_state.file_size = None
-    st.session_state.text = None
-    st.session_state.chunks = None
+    st.session_state.file_names = []
+    st.session_state.total_characters = 0
+    st.session_state.all_chunks = None
+    st.session_state.chunk_sources = None
     st.session_state.embeddings = None
     st.session_state.vector_store = None
+    st.session_state.uploader_key += 1
     st.rerun()
 
 if clear_col.button("💬 Clear Conversation"):
@@ -117,54 +123,74 @@ st.sidebar.markdown("---")
 st.sidebar.info("Gemini 3.6 Flash")
 
 # --------------------------------------------------
-# Process PDF (Only Once)
+# Process PDFs (Only When the Uploaded Set Changes)
 # --------------------------------------------------
 
-if uploaded_file:
+if uploaded_files:
 
-    # Only process if a new file is uploaded
+    current_names = [pdf.name for pdf in uploaded_files]
+
     if (
         not st.session_state.processed
-        or st.session_state.file_name != uploaded_file.name
+        or st.session_state.file_names != current_names
     ):
 
         st.session_state.chat_history = []
 
-        with st.spinner("Reading PDF..."):
-            text = extract_text_from_pdf(uploaded_file)
+        all_chunks = []
+        chunk_sources = []
+        total_characters = 0
 
-        with st.spinner("Splitting document..."):
-            chunks = split_text(text)
+        with st.spinner("Reading PDFs..."):
+
+            for pdf in uploaded_files:
+
+                text = extract_text_from_pdf(pdf)
+
+                total_characters += len(text)
+
+                pdf_chunks = split_text(text)
+
+                all_chunks.extend(pdf_chunks)
+
+                chunk_sources.extend(
+                    [pdf.name] * len(pdf_chunks)
+                )
 
         with st.spinner("Creating embeddings..."):
-            embeddings = create_embeddings(chunks)
+            embeddings = create_embeddings(all_chunks)
 
-        with st.spinner("Building vector database..."):
+        with st.spinner("Building vector store..."):
             vector_store = create_vector_store(embeddings)
 
-        st.session_state.text = text
-        st.session_state.chunks = chunks
+        st.session_state.all_chunks = all_chunks
+        st.session_state.chunk_sources = chunk_sources
+        st.session_state.total_characters = total_characters
         st.session_state.embeddings = embeddings
         st.session_state.vector_store = vector_store
-        st.session_state.file_name = uploaded_file.name
-        st.session_state.file_size = uploaded_file.size
+        st.session_state.file_names = current_names
         st.session_state.processed = True
 
-    text = st.session_state.text
-    chunks = st.session_state.chunks
+    all_chunks = st.session_state.all_chunks
+    chunk_sources = st.session_state.chunk_sources
+    total_characters = st.session_state.total_characters
     embeddings = st.session_state.embeddings
     vector_store = st.session_state.vector_store
 
-    st.success(f"{uploaded_file.name} uploaded successfully")
+    if len(uploaded_files) == 1:
+        st.success(f"{uploaded_files[0].name} uploaded successfully")
+    else:
+        st.success(f"{len(uploaded_files)} documents uploaded successfully")
 
     # --------------------------------------------------
-    # Sidebar Current Document
+    # Sidebar: Uploaded Documents
     # --------------------------------------------------
 
     st.sidebar.markdown("---")
-    st.sidebar.markdown("### Current Document")
-    st.sidebar.write(st.session_state.file_name)
-    st.sidebar.caption(f"{st.session_state.file_size / 1024:.1f} KB")
+    st.sidebar.subheader("Uploaded Documents")
+
+    for pdf in uploaded_files:
+        st.sidebar.write(f"• {pdf.name}")
 
     # --------------------------------------------------
     # Sidebar Statistics
@@ -173,8 +199,9 @@ if uploaded_file:
     st.sidebar.markdown("---")
     st.sidebar.subheader("Document Statistics")
 
-    st.sidebar.metric("Characters", f"{len(text):,}")
-    st.sidebar.metric("Chunks", len(chunks))
+    st.sidebar.metric("Documents", len(uploaded_files))
+    st.sidebar.metric("Characters", f"{total_characters:,}")
+    st.sidebar.metric("Chunks", len(all_chunks))
     st.sidebar.metric("Embedding Dimension", len(embeddings[0]))
     st.sidebar.metric("Vectors Stored", vector_store.ntotal)
 
@@ -182,10 +209,10 @@ if uploaded_file:
     # Chat
     # --------------------------------------------------
 
-    st.subheader("Chat with your PDF")
+    st.subheader("Chat with your PDFs")
 
     question = st.chat_input(
-        "Ask a question about the uploaded PDF..."
+        "Ask a question about the uploaded PDF(s)..."
     )
 
     if question:
@@ -204,11 +231,15 @@ if uploaded_file:
                 retrieved_chunks = search_vector_store(
                     vector_store,
                     query_embedding,
-                    chunks,
+                    all_chunks,
+                    chunk_sources,
                     k=6
                 )
 
-            context = "\n\n".join(retrieved_chunks)
+            context = "\n\n".join(
+                chunk["text"]
+                for chunk in retrieved_chunks
+            )
 
             with st.spinner("Generating answer..."):
 
@@ -231,7 +262,8 @@ if uploaded_file:
         except Exception as e:
 
             st.error(f"❌ Error: {e}")
-                # --------------------------------------------------
+
+    # --------------------------------------------------
     # Conversation History
     # --------------------------------------------------
 
@@ -253,16 +285,12 @@ if uploaded_file:
                     f"{chat['time']:.2f}s response time"
                 )
 
-            with st.expander("Retrieved Context"):
+            st.caption("Retrieved Context")
 
-                for i, chunk in enumerate(chat["chunks"], start=1):
+            for i, chunk in enumerate(chat["chunks"], start=1):
 
-                    st.text_area(
-                        f"Chunk {i}",
-                        chunk,
-                        height=180,
-                        disabled=True
-                    )
+                with st.expander(f"{chunk['source']} • Chunk {i}"):
+                    st.write(chunk["text"])
 
         # Auto-scroll to the latest message
         components.html(
@@ -285,9 +313,10 @@ if uploaded_file:
     # --------------------------------------------------
 
     with st.sidebar.expander("Developer Tools"):
+        st.caption(f"Source: {chunk_sources[0]}")
         st.text_area(
             "Chunk 1 content",
-            value=chunks[0],
+            value=all_chunks[0],
             height=250,
             disabled=True
         )
@@ -297,7 +326,7 @@ else:
     st.info("""
 Welcome!
 
-Upload a PDF from the sidebar to begin chatting with your document.
+Upload one or more PDFs from the sidebar to begin chatting with your documents.
 """)
 
 # --------------------------------------------------
