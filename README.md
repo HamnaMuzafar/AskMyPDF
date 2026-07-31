@@ -28,19 +28,19 @@
 
 ### Multiple PDF Upload
 
-![Upload](screenshots/upload.png)
+![Upload](screenshots/upload-multiple-pdfs.png)
 
 ---
 
 ### Chat Interface
 
-![Chat](screenshots/chat.png)
+![Chat](screenshots/chat-interface.png)
 
 ---
 
 ### Retrieved Context
 
-![Context](screenshots/context.png)
+![Context](screenshots/retrieved-context.png)
 
 ---
 
