@@ -9,6 +9,7 @@ sentence-transformers
 faiss-cpu
 
 pypdf
+pymupdf
 
 python-dotenv
 
